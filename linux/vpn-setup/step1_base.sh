@@ -37,16 +37,32 @@ echo "wireshark-common wireshark-common/install-setuid boolean false" | debconf-
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
   awscli python3-pip apache2-utils squid tshark || true
 
-# Fix for aws-cfn-bootstrap on Ubuntu 22.04 (Python 3.10)
-echo "[$(date)] Installing aws-cfn-bootstrap..."
-pip3 install -q https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
+# Install Python 3.13 via deadsnakes PPA
+echo "[$(date)] Installing Python 3.13..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq software-properties-common
+add-apt-repository -y ppa:deadsnakes/ppa
+apt-get update -qq
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3.13 python3.13-full
+
+# Install pip for Python 3.13
+python3.13 -m ensurepip --upgrade || true
+
+# Fix for aws-cfn-bootstrap on Python 3.13
+echo "[$(date)] Installing aws-cfn-bootstrap for Python 3.13..."
+python3.13 -m pip install -q https://s3.amazonaws.com/cloudformation-examples/aws-cfn-bootstrap-py3-latest.tar.gz
 
 # Apply fix for collections.MutableMapping
-PYTHON_VERSION=$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-LIB_PATH="/usr/local/lib/python${PYTHON_VERSION}/dist-packages/cfnbootstrap/util.py"
+LIB_PATH="/usr/local/lib/python3.13/dist-packages/cfnbootstrap/util.py"
 if [ -f "$LIB_PATH" ]; then
-    echo "[$(date)] Applying Python 3.10 fix to $LIB_PATH"
+    echo "[$(date)] Applying Python fix to $LIB_PATH"
     sed -i "s/collections.MutableMapping/collections.abc.MutableMapping/g" "$LIB_PATH"
+else
+    # Try to find it via python
+    LIB_PATH=$(python3.13 -c "import cfnbootstrap; print(cfnbootstrap.__file__)" 2>/dev/null | sed 's/__init__.py/util.py/')
+    if [ -n "$LIB_PATH" ] && [ -f "$LIB_PATH" ]; then
+        echo "[$(date)] Applying Python fix to $LIB_PATH"
+        sed -i "s/collections.MutableMapping/collections.abc.MutableMapping/g" "$LIB_PATH"
+    fi
 fi
 
 # Verify cfn-signal
