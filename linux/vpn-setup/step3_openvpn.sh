@@ -54,7 +54,7 @@ sed -i 's/ip\.seeip\.org/api.seeip.org/g' openvpn-install.sh
 sed -i 's|sha256sum.*\/easy-rsa\.tgz|sha256sum /root/easy-rsa.tgz|g' openvpn-install.sh || true
 
 # Run the installer
-bash openvpn-install.sh </dev/null 2>&1
+bash openvpn-install.sh install </dev/null 2>&1
 
 # Get IP for filename (fallback to unknown if failed)
 PROXY_IP_ADDRESS=$(curl -s --max-time 10 https://api.ipify.org || echo "unknown")
