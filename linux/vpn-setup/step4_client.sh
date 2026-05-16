@@ -24,47 +24,21 @@ send_telegram "$TELEGRAM_CONSULTANT_ID" "[${SERVER_GIVEN_ID}] STEP 4/6: Secondar
 
 CLIENT="client432"
 
-if [ ! -d "/etc/openvpn/easy-rsa/" ]; then
-    echo "[ERROR] /etc/openvpn/easy-rsa/ not found. Please install OpenVPN first."
+# Use the installer script to generate the client config
+if [ -f "/root/openvpn-install.sh" ]; then
+    bash /root/openvpn-install.sh client add "$CLIENT" --output "/root/$CLIENT.ovpn"
+elif [ -f "openvpn-install.sh" ]; then
+    bash openvpn-install.sh client add "$CLIENT" --output "/root/$CLIENT.ovpn"
+else
+    echo "[ERROR] openvpn-install.sh not found. Please download it first."
     exit 1
 fi
 
-cd /etc/openvpn/easy-rsa/
-
-# Generate client cert
-./easyrsa --batch build-client-full "$CLIENT" nopass 2>/dev/null || {
-    echo "[WARN] easyrsa failed, maybe client already exists or error occurred. Continuing..."
-}
-
-if [ ! -f "/etc/openvpn/client-template.txt" ]; then
-    echo "[WARN] /etc/openvpn/client-template.txt not found. Creating a minimal one or assuming it exists."
-    # The angristan script usually creates client configs differently or puts them in /root/
-    # But let's follow the CF template logic if it assumes it exists.
-fi
-
-OUTPUT_FILE="/root/$CLIENT.ovpn"
-cp /etc/openvpn/client-template.txt "$OUTPUT_FILE" 2>/dev/null || touch "$OUTPUT_FILE"
-
-{
-  echo "<ca>"
-  cat /etc/openvpn/easy-rsa/pki/ca.crt 2>/dev/null || echo "CA_NOT_FOUND"
-  echo "</ca>"
-  echo "<cert>"
-  awk '/BEGIN/,/END CERTIFICATE/' /etc/openvpn/easy-rsa/pki/issued/$CLIENT.crt 2>/dev/null || echo "CERT_NOT_FOUND"
-  echo "</cert>"
-  echo "<key>"
-  cat /etc/openvpn/easy-rsa/pki/private/$CLIENT.key 2>/dev/null || echo "KEY_NOT_FOUND"
-  echo "</key>"
-  echo "<tls-crypt>"
-  cat /etc/openvpn/tls-crypt.key 2>/dev/null || echo "TLS_CRYPT_NOT_FOUND"
-  echo "</tls-crypt>"
-} >> "$OUTPUT_FILE"
-
-sed -i '1i #t.me/DemandVPNBot' "$OUTPUT_FILE"
+sed -i '1i #t.me/DemandVPNBot' "/root/$CLIENT.ovpn"
 
 # S3 Upload
 if command -v aws &>/dev/null; then
-    aws s3 cp "$OUTPUT_FILE" \
+    aws s3 cp "/root/$CLIENT.ovpn" \
       "s3://${S3_BUCKET_NAME}/${TELEGRAM_CLIENT_ID}/${SERVER_GIVEN_ID}/$CLIENT.ovpn" || true
 else
     echo "[WARN] aws cli not found, skipping S3 upload."
